@@ -1,0 +1,3 @@
+display_name: "Generate DOCX"
+short_description: "Create Word documents from Markdown or HTML"
+default_prompt: "Convert this content to a Word document"

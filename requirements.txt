@@ -1,0 +1,4 @@
+pyscript==2024.1.1
+python-docx==1.1.0
+markdown2==2.4.12
+beautifulsoup4==4.12.3

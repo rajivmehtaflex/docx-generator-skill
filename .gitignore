@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated artifacts
+*.egg-info/
+*.whl
+dist/
+build/
+
+# Logs
+*.log
+
+# Git
+.git/
+
+# Cloudflare tunnel
+config.yml
+config.yaml
+~/.cloudflared/

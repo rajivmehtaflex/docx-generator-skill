@@ -1,0 +1,38 @@
+{
+  "name": "docx-generator-skill",
+  "version": "1.0.0",
+  "description": "Browser-based Word document generator using Python-WASM (PyScript)",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "test": "python docx_generator.py",
+    "lint": "python -m py_compile docx_generator.py"
+  },
+  "keywords": [
+    "docx",
+    "word",
+    "document",
+    "generator",
+    "pyscript",
+    "wasm",
+    "python",
+    "markdown",
+    "html",
+    "codex",
+    "browser-based"
+  ],
+  "author": "Hermes Agent",
+  "license": "MIT",
+  "dependencies": {
+    "pyscript": "^2024.1.1"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/docx-generator-skill"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/docx-generator-skill/issues"
+  },
+  "homepage": "https://github.com/yourusername/docx-generator-skill#readme"
+}

@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocX Generator - Browser-Based Python</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+    <!-- PyScript configuration: declare packages to load -->
+    <py-config>
+      packages = ["python-docx", "markdown2", "beautifulsoup4"]
+    </py-config>
+
+    <!-- JavaScript failsafe: hide loading overlay if PyScript doesn't respond -->
+    <script>
+      // Timeout: if PyScript hasn't hidden the overlay in 30s, show a helpful error
+      setTimeout(function() {
+        var overlay = document.getElementById('loading-overlay');
+        if (overlay && !overlay.classList.contains('hidden')) {
+          document.getElementById('loading-text').textContent = 'Still loading...';
+          document.getElementById('loading-subtext').textContent =
+            'This may take up to 60 seconds on first load. ' +
+            'Pyodide is downloading ~30MB of Python packages.';
+        }
+      }, 15000);
+
+      setTimeout(function() {
+        var overlay = document.getElementById('loading-overlay');
+        if (overlay && !overlay.classList.contains('hidden')) {
+          document.getElementById('loading-text').textContent = 'Taking longer than expected';
+          document.getElementById('loading-subtext').textContent =
+            'Check browser console (F12) for errors. ' +
+            'Try a different browser or check your internet connection. ' +
+            'You can also refresh the page and try again.';
+          document.getElementById('loading-error').style.display = 'block';
+        }
+      }, 60000);
+    </script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --bg-light: #f8fafc;
+            --bg-white: #ffffff;
+            --border: #e2e8f0;
+            --text-dark: #1e293b;
+            --text-light: #64748b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-panel {
+            background: var(--bg-white);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .toolbar {
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+            padding: 15px 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .toolbar-label {
+            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+        }
+
+        .toolbar-select {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .toolbar-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+
+        .editor-section {
+            padding: 20px;
+            border-right: 1px solid var(--border);
+        }
+
+        .editor-section:last-child {
+            border-right: none;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .section-badge {
+            background: var(--primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .editor-textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        .editor-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .preview-section {
+            background: var(--bg-light);
+        }
+
+        .preview-content {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+            font-family: 'Times New Roman', serif;
+            line-height: 1.6;
+        }
+
+        .preview-content h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+        }
+
+        .preview-content h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-dark);
+        }
+
+        .preview-content h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+
+        .preview-content p {
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+        }
+
+        .preview-content ul, .preview-content ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .preview-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .preview-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .preview-content th, .preview-content td {
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .preview-content th {
+            background: var(--bg-light);
+            font-weight: 600;
+        }
+
+        .preview-content strong {
+            font-weight: bold;
+        }
+
+        .preview-content em {
+            font-style: italic;
+        }
+
+        .status-bar {
+            background: var(--bg-light);
+            border-top: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--secondary);
+        }
+
+        .status-indicator.loading {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-indicator.ready {
+            background: var(--success);
+        }
+
+        .status-indicator.error {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .advanced-options {
+            background: var(--bg-light);
+            border-top: 1px solid var(--border);
+            padding: 15px 20px;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .option-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .option-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .option-input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .option-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+        }
+
+        .option-checkbox input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.97);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .loading-progress-bar {
+            width: 300px;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #764ba2);
+            border-radius: 3px;
+            width: 0%;
+            animation: progress-anim 30s ease-in-out;
+        }
+
+        @keyframes progress-anim {
+            0% { width: 0%; }
+            30% { width: 30%; }
+            60% { width: 60%; }
+            80% { width: 75%; }
+            100% { width: 90%; }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        .loading-subtext {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-top: 4px;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .loading-error {
+            margin-top: 20px;
+            padding: 12px 20px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            color: #991b1b;
+            font-size: 0.9rem;
+            display: none;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .loading-error button {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .loading-error button:hover {
+            background: var(--primary-dark);
+        }
+
+        @media (max-width: 768px) {
+            .editor-container {
+                grid-template-columns: 1fr;
+            }
+
+            .editor-section {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .toolbar-group {
+                flex-wrap: wrap;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-progress-bar">
+            <div class="loading-progress-bar-inner"></div>
+        </div>
+        <div class="loading-text" id="loading-text">Loading Python Environment...</div>
+        <div class="loading-subtext" id="loading-subtext">Initializing Pyodide WASM runtime and downloading packages (python-docx, markdown2, beautifulsoup4)</div>
+        <div class="loading-error" id="loading-error">
+            <p>⚠️ PyScript is taking longer than expected to load.</p>
+            <p>This could be due to:</p>
+            <ul style="text-align:left;margin-top:8px;">
+                <li>Slow internet connection (Pyodide is ~30MB)</li>
+                <li>Browser compatibility issue</li>
+                <li>CORS or Content Security Policy restrictions</li>
+            </ul>
+            <button onclick="location.reload()">🔄 Refresh Page</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>📄 DocX Generator</h1>
+            <p>Browser-based Word document generator using Python-WASM</p>
+        </div>
+
+        <div class="main-panel">
+            <div class="toolbar">
+                <div class="toolbar-group">
+                    <span class="toolbar-label">Input Format:</span>
+                    <select id="input-format" class="toolbar-select">
+                        <option value="markdown">Markdown</option>
+                        <option value="html">HTML</option>
+                    </select>
+                </div>
+
+                <div class="toolbar-group">
+                    <button id="btn-generate" class="btn btn-primary" disabled>
+                        <span>⚡ Generate DocX</span>
+                    </button>
+                    <button id="btn-download" class="btn btn-success" disabled>
+                        <span>⬇️ Download DocX</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="editor-container">
+                <div class="editor-section">
+                    <div class="section-header">
+                        <span class="section-title">Editor</span>
+                        <span id="format-badge" class="section-badge">Markdown</span>
+                    </div>
+                    <textarea id="editor" class="editor-textarea" placeholder="Enter your content here..."></textarea>
+                </div>
+
+                <div class="editor-section preview-section">
+                    <div class="section-header">
+                        <span class="section-title">Preview</span>
+                        <span class="section-badge">Live</span>
+                    </div>
+                    <div id="preview" class="preview-content"></div>
+                </div>
+            </div>
+
+            <div class="advanced-options">
+                <div class="options-grid">
+                    <div class="option-item">
+                        <span class="option-label">Document Title</span>
+                        <input type="text" id="doc-title" class="option-input" placeholder="Enter document title">
+                    </div>
+
+                    <div class="option-item">
+                        <span class="option-label">Author Name</span>
+                        <input type="text" id="doc-author" class="option-input" placeholder="Enter author name">
+                    </div>
+
+                    <div class="option-item">
+                        <span class="option-label">Header Text</span>
+                        <input type="text" id="header-text" class="option-input" placeholder="Enter header text">
+                    </div>
+
+                    <div class="option-item">
+                        <span class="option-label">Footer Text</span>
+                        <input type="text" id="footer-text" class="option-input" placeholder="Enter footer text">
+                    </div>
+
+                    <div class="option-item">
+                        <span class="option-label">Page Number Format</span>
+                        <select id="page-number-format" class="option-input">
+                            <option value="none">None</option>
+                            <option value="simple">Page {n}</option>
+                            <option value="total">Page {n} of {total}</option>
+                        </select>
+                    </div>
+
+                    <div class="option-item">
+                        <div class="option-checkbox">
+                            <input type="checkbox" id="add-table-of-contents">
+                            <span class="option-label">Add Table of Contents</span>
+                        </div>
+                    </div>
+
+                    <div class="option-item">
+                        <div class="option-checkbox">
+                            <input type="checkbox" id="enable-page-breaks" checked>
+                            <span class="option-label">Enable Page Breaks</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-item">
+                    <div id="status-indicator" class="status-indicator loading"></div>
+                    <span id="status-text">Loading Python packages...</span>
+                </div>
+                <div class="status-item">
+                    <span id="char-count">0 characters</span>
+                    <span>•</span>
+                    <span id="word-count">0 words</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript: handles all DOM events and calls Python for logic -->
+    <script>
+      // Set up all DOM event listeners as soon as the document is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        // Generate button - provides immediate visual feedback
+        document.getElementById('btn-generate').addEventListener('click', function(e) {
+          var btn = this;
+          btn.disabled = true;
+          btn.innerHTML = '<span>⏳ Generating...</span>';
+          document.getElementById('status-text').textContent = 'Generating DOCX...';
+          document.getElementById('status-indicator').className = 'status-indicator loading';
+
+          // Call Python function exposed on window
+          if (window.js_generate_docx) {
+            try {
+              window.js_generate_docx();
+            } catch(e) {
+              console.error('Generate error:', e);
+              btn.disabled = false;
+              btn.innerHTML = '<span>⚡ Generate DocX</span>';
+              document.getElementById('status-text').textContent = 'Error: ' + e.message;
+            }
+          } else {
+            // PyScript not ready yet - queue for later
+            window._genQueue = window._genQueue || [];
+            window._genQueue.push('generate_docx');
+          }
+
+          // Safety timeout: re-enable button after 30s
+          setTimeout(function() {
+            if (btn.disabled) {
+              btn.disabled = false;
+              btn.innerHTML = '<span>⚡ Generate DocX</span>';
+            }
+          }, 30000);
+        });
+
+        // Download button
+        document.getElementById('btn-download').addEventListener('click', function(e) {
+          document.getElementById('status-text').textContent = 'Downloading DOCX...';
+          document.getElementById('status-indicator').className = 'status-indicator loading';
+          if (window.js_download_docx) {
+            try {
+              window.js_download_docx();
+            } catch(e) {
+              console.error('Download error:', e);
+            }
+          }
+        });
+
+        // Editor input: live preview
+        document.getElementById('editor').addEventListener('input', function(e) {
+          if (window.js_update_preview) {
+            try {
+              window.js_update_preview();
+            } catch(e) {
+              // silently fail on initial keystrokes
+            }
+          }
+        });
+
+        // Format switch
+        document.getElementById('input-format').addEventListener('change', function(e) {
+          document.getElementById('format-badge').textContent =
+            this.value.charAt(0).toUpperCase() + this.value.slice(1);
+          if (window.js_update_preview) {
+            try {
+              window.js_update_preview();
+            } catch(e) {}
+          }
+        });
+
+        console.log('JS event listeners registered');
+      });
+
+      // Polling fallback: re-attach if PyScript registers its functions later
+      function waitForPyScript(fn) {
+        if (window.js_generate_docx) {
+          fn();
+        } else {
+          setTimeout(function() { waitForPyScript(fn); }, 500);
+        }
+      }
+    </script>
+
+    <script type="py">
+        from pyscript import document, window
+        import json
+        import traceback
+        import asyncio
+
+        # Global state
+        docx_content = None
+        is_ready = False
+
+        def update_status(status, message):
+            """Update status indicator and text"""
+            indicator = document.getElementById("status-indicator")
+            text = document.getElementById("status-text")
+
+            indicator.className = f"status-indicator {status}"
+            text.textContent = message
+
+        def hide_loading():
+            """Hide loading overlay"""
+            overlay = document.getElementById("loading-overlay")
+            if overlay:
+                overlay.classList.add("hidden")
+                window.console.log("Loading overlay hidden - PyScript ready")
+
+        def enable_buttons():
+            """Enable generate and download buttons"""
+            gen = document.getElementById("btn-generate")
+            gen.disabled = False
+            gen.innerHTML = "<span>⚡ Generate DocX</span>"
+            document.getElementById("btn-download").disabled = False
+
+        def get_document_options():
+            """Get document generation options from UI"""
+            return {
+                "title": document.getElementById("doc-title").value or "Untitled Document",
+                "author": document.getElementById("doc-author").value or "Unknown Author",
+                "header": document.getElementById("header-text").value,
+                "footer": document.getElementById("footer-text").value,
+                "page_number_format": document.getElementById("page-number-format").value,
+                "add_toc": document.getElementById("add-table-of-contents").checked,
+                "enable_page_breaks": document.getElementById("enable-page-breaks").checked
+            }
+
+        def convert_markdown_to_html(markdown_text):
+            """Convert markdown to HTML using markdown2"""
+            try:
+                import markdown2
+                html = markdown2.markdown(markdown_text, extras=["tables", "fenced-code-blocks"])
+                return html
+            except ImportError:
+                window.console.log("markdown2 not available, using plain text fallback")
+                return f"<pre>{markdown_text}</pre>"
+            except Exception as e:
+                window.console.log(f"Markdown conversion error: {e}")
+                return f"<p>Error converting markdown: {str(e)}</p>"
+
+        def update_preview():
+            """Update live preview based on editor content"""
+            try:
+                editor = document.getElementById("editor")
+                preview = document.getElementById("preview")
+                format_select = document.getElementById("input-format")
+                format_badge = document.getElementById("format-badge")
+
+                content = editor.value
+                input_format = format_select.value
+
+                format_badge.textContent = input_format.capitalize()
+
+                if input_format == "markdown":
+                    preview.innerHTML = convert_markdown_to_html(content) or "<p>Start typing to see preview...</p>"
+                else:
+                    preview.innerHTML = content or "<p>Start typing to see preview...</p>"
+
+                char_count = len(content)
+                word_count = len(content.split()) if content else 0
+
+                document.getElementById("char-count").textContent = f"{char_count} characters"
+                document.getElementById("word-count").textContent = f"{word_count} words"
+            except Exception as e:
+                window.console.log(f"Preview error: {e}")
+
+        async def generate_docx():
+            """Generate DOCX from editor content"""
+            global docx_content
+
+            try:
+                update_status("loading", "Generating DOCX...")
+                window.console.log("Starting DOCX generation...")
+
+                # Ensure required packages are installed (fallback if startup install failed)
+                try:
+                    from docx import Document
+                except ImportError:
+                    try:
+                        import micropip
+                        window.console.log("Installing python-docx (lazy)...")
+                        update_status("loading", "Installing python-docx...")
+                        import asyncio
+                        await micropip.install(["python-docx", "markdown2", "beautifulsoup4"])
+                        window.console.log("Lazy install complete")
+                    except Exception as e2:
+                        window.console.log(f"Lazy install failed: {e2}")
+                        update_status("error", "Failed to load python-docx. Refresh and try again.")
+                        return
+
+                # Now import required libraries
+                from docx import Document
+                from docx.shared import Pt, Inches, RGBColor
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                from docx.oxml.shared import OxmlElement, qn
+                import io
+                import base64
+
+                window.console.log("Imports successful, creating document...")
+
+                editor = document.getElementById("editor")
+                format_select = document.getElementById("input-format")
+                options = get_document_options()
+
+                content = editor.value
+                input_format = format_select.value
+
+                # Create new document
+                doc = Document()
+
+                # Set document properties
+                doc.core_properties.title = options["title"]
+                doc.core_properties.author = options["author"]
+
+                # Add header if specified
+                if options["header"]:
+                    section = doc.sections[0]
+                    header = section.header
+                    header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+                    header_para.text = options["header"]
+                    header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                    # Style header
+                    run = header_para.runs[0]
+                    run.font.size = Pt(10)
+                    run.font.color.rgb = RGBColor(0x42, 0x42, 0x42)
+
+                # Add footer if specified
+                if options["footer"]:
+                    section = doc.sections[0]
+                    footer = section.footer
+                    footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+                    footer_para.text = options["footer"]
+                    footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                    # Style footer
+                    run = footer_para.runs[0]
+                    run.font.size = Pt(10)
+                    run.font.color.rgb = RGBColor(0x42, 0x42, 0x42)
+
+                # Add page numbers if requested
+                if options["page_number_format"] != "none":
+                    section = doc.sections[0]
+                    footer = section.footer
+                    page_num_para = footer.add_paragraph()
+                    page_num_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                    if options["page_number_format"] == "simple":
+                        page_num_para.text = "Page {page}"
+                    else:
+                        page_num_para.text = "Page {page} of {numpages}"
+
+                    run = page_num_para.runs[0]
+                    run.font.size = Pt(9)
+
+                # Process content based on format
+                if input_format == "markdown":
+                    html_content = convert_markdown_to_html(content)
+                    process_html_to_docx(doc, html_content, options)
+                else:
+                    process_html_to_docx(doc, content, options)
+
+                # Add table of contents if requested
+                if options["add_toc"]:
+                    add_table_of_contents(doc)
+
+                # Save document to bytes
+                doc_bytes = io.BytesIO()
+                doc.save(doc_bytes)
+                doc_bytes.seek(0)
+
+                # Convert to base64 for download
+                docx_content = base64.b64encode(doc_bytes.read()).decode('utf-8')
+
+                update_status("ready", "DOCX generated successfully!")
+                window.console.log("DOCX generation complete!")
+
+                # Enable download button and re-enable Generate button
+                document.getElementById("btn-download").disabled = False
+                gen_btn = document.getElementById("btn-generate")
+                gen_btn.disabled = False
+                gen_btn.innerHTML = "<span>⚡ Generate DocX</span>"
+
+            except Exception as e:
+                window.console.log(f"Error generating DOCX: {e}")
+                import traceback
+                window.console.log(traceback.format_exc())
+                update_status("error", f"Error: {str(e)}")
+                docx_content = None
+
+        def process_html_to_docx(doc, html_content, options):
+            """Process HTML content and add to DOCX document"""
+            try:
+                from bs4 import BeautifulSoup
+                from docx.shared import Pt, Inches
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+                soup = BeautifulSoup(html_content, 'html.parser')
+
+                for element in soup.find_all():
+                    if element.name == 'h1':
+                        para = doc.add_paragraph(element.get_text(), style='Heading 1')
+                    elif element.name == 'h2':
+                        para = doc.add_paragraph(element.get_text(), style='Heading 2')
+                    elif element.name == 'h3':
+                        para = doc.add_paragraph(element.get_text(), style='Heading 3')
+                    elif element.name == 'p':
+                        para = doc.add_paragraph(element.get_text())
+                    elif element.name == 'ul':
+                        for li in element.find_all('li', recursive=False):
+                            doc.add_paragraph(li.get_text(), style='List Bullet')
+                    elif element.name == 'ol':
+                        for li in element.find_all('li', recursive=False):
+                            doc.add_paragraph(li.get_text(), style='List Number')
+                    elif element.name == 'table':
+                        process_table(doc, element)
+                    elif element.name == 'hr' and options["enable_page_breaks"]:
+                        doc.add_page_break()
+
+            except ImportError:
+                # Fallback if BeautifulSoup not available
+                window.console.log("BeautifulSoup not available, adding as plain text")
+                doc.add_paragraph(html_content)
+            except Exception as e:
+                window.console.log(f"Error processing HTML: {e}")
+                # Fallback: add as plain text
+                doc.add_paragraph(html_content)
+
+        def process_table(doc, table_element):
+            """Process HTML table and add to DOCX"""
+            try:
+                from docx.shared import Inches
+                from docx.enum.table import WD_TABLE_ALIGNMENT
+
+                rows = table_element.find_all('tr')
+                if not rows:
+                    return
+
+                # Calculate number of columns
+                num_cols = max(len(row.find_all(['td', 'th'])) for row in rows)
+
+                # Create table
+                table = doc.add_table(rows=len(rows), cols=num_cols)
+                table.style = 'Light Grid Accent 1'
+
+                for i, row in enumerate(rows):
+                    cells = row.find_all(['td', 'th'])
+                    for j, cell in enumerate(cells):
+                        if i < len(table.rows) and j < len(table.columns):
+                            table_cell = table.cell(i, j)
+                            table_cell.text = cell.get_text().strip()
+
+                            # Make header row bold
+                            if cell.name == 'th':
+                                for paragraph in table_cell.paragraphs:
+                                    for run in paragraph.runs:
+                                        run.font.bold = True
+
+            except Exception as e:
+                window.console.log(f"Error processing table: {e}")
+
+        def add_table_of_contents(doc):
+            """Add table of contents to document"""
+            try:
+                # Add table of contents placeholder
+                toc_para = doc.add_paragraph("Table of Contents", style='Heading 1')
+                toc_para.add_run().add_break()
+
+                # Add placeholder for TOC
+                note_para = doc.add_paragraph("[Table of Contents will be generated here]")
+                note_para.italic = True
+
+                doc.add_page_break()
+
+            except Exception as e:
+                window.console.log(f"Error adding table of contents: {e}")
+
+        def download_docx():
+            """Download generated DOCX file"""
+            global docx_content
+
+            if not docx_content:
+                update_status("error", "No DOCX content to download. Please generate first.")
+                return
+
+            try:
+                options = get_document_options()
+                filename = f"{options['title'].replace(' ', '_')}.docx"
+
+                # Create download link
+                download_link = document.createElement("a")
+                download_link.href = f"data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{docx_content}"
+                download_link.download = filename
+
+                # Trigger download
+                document.body.appendChild(download_link)
+                download_link.click()
+                document.body.removeChild(download_link)
+
+                update_status("ready", "DOCX downloaded successfully!")
+
+            except Exception as e:
+                window.console.log(f"Error downloading DOCX: {e}")
+                update_status("error", f"Download error: {str(e)}")
+
+        # JavaScript bridge: JS calls this to invoke Python functions
+        def __js_bridge(fnName, args=[]):
+            """Bridge function called from JavaScript"""
+            if fnName == "generate_docx":
+                generate_docx()
+            elif fnName == "download_docx":
+                download_docx()
+            elif fnName == "update_preview":
+                update_preview()
+            else:
+                window.console.log(f"Unknown bridge call: {fnName}")
+
+        # Expose Python functions to JavaScript via window object
+        window.js_generate_docx = generate_docx
+        window.js_download_docx = download_docx
+        window.js_update_preview = update_preview
+
+        # Initialize the application
+        async def init():
+            """Initialize the application"""
+            global is_ready
+
+            try:
+                window.console.log("DocX Generator initializing...")
+
+                # Install required packages at startup
+                try:
+                    import micropip
+                    window.console.log("Installing packages via micropip...")
+                    update_status("loading", "Installing python-docx, markdown2, beautifulsoup4...")
+                    await micropip.install(["python-docx", "markdown2", "beautifulsoup4"])
+                    window.console.log("Packages installed successfully!")
+                except Exception as e:
+                    window.console.log(f"Package install note: {e}")
+                    # This is a fallback - packages may already be loaded via py-config
+
+                # Set initial content
+                editor = document.getElementById("editor")
+                editor.value = """# Welcome to DocX Generator
+
+This is a **powerful** browser-based document generator that converts your *Markdown* or HTML content into professional Word documents.
+
+## Features
+
+- Convert Markdown/HTML to DOCX
+- Add custom headers and footers
+- Include page numbers
+- Generate table of contents
+- Support for complex layouts
+- Tables, lists, and formatting
+
+## Example Table
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Markdown | ✅ | Full support |
+| HTML | ✅ | Full support |
+| Tables | ✅ | Formatted tables |
+| Images | ⚠️ | Limited support |
+
+## Getting Started
+
+1. Enter your content in the editor
+2. Choose your input format
+3. Configure document options
+4. Click "Generate DocX"
+5. Download your document!
+
+---
+
+*Generated with Python-WASM technology*
+"""
+
+                # Update preview with initial content
+                update_preview()
+
+                # Hide loading and enable UI
+                hide_loading()
+                enable_buttons()
+                update_status("ready", "Ready to generate documents")
+                is_ready = True
+
+                window.console.log("DocX Generator initialization complete!")
+
+                # Drain any queued JS calls that arrived before PyScript was ready
+                try:
+                    q = window._genQueue
+                    if q and q.length > 0:
+                        for fnName in q:
+                            if fnName == "generate_docx":
+                                generate_docx()
+                            elif fnName == "download_docx":
+                                download_docx()
+                            elif fnName == "update_preview":
+                                update_preview()
+                        window._genQueue = []
+                except:
+                    pass
+
+            except Exception as e:
+                window.console.log(f"Initialization error: {e}")
+                import traceback
+                window.console.log(traceback.format_exc())
+                update_status("error", f"Initialization failed: {str(e)}")
+
+        # Start the application - use ensure_future since init() is async
+        asyncio.ensure_future(init())
+    </script>
+</body>
+</html>

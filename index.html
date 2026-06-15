@@ -757,15 +757,19 @@
         def convert_markdown_to_html(markdown_text):
             """Convert markdown to HTML using markdown2"""
             try:
-                import markdown2
-                html = markdown2.markdown(markdown_text, extras=["tables", "fenced-code-blocks"])
-                return html
+                from docx_generator import MarkdownConverter
+                return MarkdownConverter.convert_to_html(markdown_text)
             except ImportError:
-                window.console.log("markdown2 not available, using plain text fallback")
-                return f"<pre>{markdown_text}</pre>"
+                try:
+                    import markdown2
+                    html = markdown2.markdown(markdown_text, extras=["tables", "fenced-code-blocks"])
+                    return html
+                except ImportError:
+                    window.console.log("markdown2 not available, using plain text")
+                    return f"<pre>{markdown_text}</pre>"
             except Exception as e:
                 window.console.log(f"Markdown conversion error: {e}")
-                return f"<p>Error converting markdown: {str(e)}</p>"
+                return f"<p>Error: {str(e)}</p>"
 
         def update_preview():
             """Update live preview based on editor content"""
@@ -801,105 +805,36 @@
                 update_status("loading", "Generating DOCX...")
                 window.console.log("Starting DOCX generation...")
 
-                # Ensure required packages are installed (fallback if startup install failed)
+                # Import docx_generator from local .whl (installed during init)
                 try:
-                    from docx import Document
+                    from docx_generator import generate_docx_from_markdown, generate_docx_from_html
                 except ImportError:
+                    # Emergency fallback: try installing the local .whl
                     try:
                         import micropip
-                        window.console.log("Installing python-docx (lazy)...")
-                        update_status("loading", "Installing python-docx...")
-                        import asyncio
-                        await micropip.install(["python-docx", "markdown2", "beautifulsoup4"])
-                        window.console.log("Lazy install complete")
+                        wheel_url = window.location.href.replace('/index.html', '').replace('/#', '') or window.location.origin
+                        if not wheel_url.endswith('/'):
+                            wheel_url += '/'
+                        wheel_url += "wheels/docx_generator-1.0.0-py3-none-any.whl"
+                        window.console.log(f"Installing docx_generator from {wheel_url}")
+                        await micropip.install(wheel_url)
+                        from docx_generator import generate_docx_from_markdown, generate_docx_from_html
                     except Exception as e2:
-                        window.console.log(f"Lazy install failed: {e2}")
-                        update_status("error", "Failed to load python-docx. Refresh and try again.")
+                        window.console.log(f"Failed to load docx_generator: {e2}")
+                        update_status("error", "Failed to load docx_generator library.")
                         return
-
-                # Now import required libraries
-                from docx import Document
-                from docx.shared import Pt, Inches, RGBColor
-                from docx.enum.text import WD_ALIGN_PARAGRAPH
-                from docx.oxml.shared import OxmlElement, qn
-                import io
-                import base64
-
-                window.console.log("Imports successful, creating document...")
 
                 editor = document.getElementById("editor")
                 format_select = document.getElementById("input-format")
-                options = get_document_options()
-
                 content = editor.value
                 input_format = format_select.value
+                options = get_document_options()
 
-                # Create new document
-                doc = Document()
-
-                # Set document properties
-                doc.core_properties.title = options["title"]
-                doc.core_properties.author = options["author"]
-
-                # Add header if specified
-                if options["header"]:
-                    section = doc.sections[0]
-                    header = section.header
-                    header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
-                    header_para.text = options["header"]
-                    header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    # Style header
-                    run = header_para.runs[0]
-                    run.font.size = Pt(10)
-                    run.font.color.rgb = RGBColor(0x42, 0x42, 0x42)
-
-                # Add footer if specified
-                if options["footer"]:
-                    section = doc.sections[0]
-                    footer = section.footer
-                    footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
-                    footer_para.text = options["footer"]
-                    footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    # Style footer
-                    run = footer_para.runs[0]
-                    run.font.size = Pt(10)
-                    run.font.color.rgb = RGBColor(0x42, 0x42, 0x42)
-
-                # Add page numbers if requested
-                if options["page_number_format"] != "none":
-                    section = doc.sections[0]
-                    footer = section.footer
-                    page_num_para = footer.add_paragraph()
-                    page_num_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    if options["page_number_format"] == "simple":
-                        page_num_para.text = "Page {page}"
-                    else:
-                        page_num_para.text = "Page {page} of {numpages}"
-
-                    run = page_num_para.runs[0]
-                    run.font.size = Pt(9)
-
-                # Process content based on format
+                # Delegate to the library
                 if input_format == "markdown":
-                    html_content = convert_markdown_to_html(content)
-                    process_html_to_docx(doc, html_content, options)
+                    docx_content = generate_docx_from_markdown(content, options)
                 else:
-                    process_html_to_docx(doc, content, options)
-
-                # Add table of contents if requested
-                if options["add_toc"]:
-                    add_table_of_contents(doc)
-
-                # Save document to bytes
-                doc_bytes = io.BytesIO()
-                doc.save(doc_bytes)
-                doc_bytes.seek(0)
-
-                # Convert to base64 for download
-                docx_content = base64.b64encode(doc_bytes.read()).decode('utf-8')
+                    docx_content = generate_docx_from_html(content, options)
 
                 update_status("ready", "DOCX generated successfully!")
                 window.console.log("DOCX generation complete!")
@@ -916,93 +851,6 @@
                 window.console.log(traceback.format_exc())
                 update_status("error", f"Error: {str(e)}")
                 docx_content = None
-
-        def process_html_to_docx(doc, html_content, options):
-            """Process HTML content and add to DOCX document"""
-            try:
-                from bs4 import BeautifulSoup
-                from docx.shared import Pt, Inches
-                from docx.enum.text import WD_ALIGN_PARAGRAPH
-
-                soup = BeautifulSoup(html_content, 'html.parser')
-
-                for element in soup.find_all():
-                    if element.name == 'h1':
-                        para = doc.add_paragraph(element.get_text(), style='Heading 1')
-                    elif element.name == 'h2':
-                        para = doc.add_paragraph(element.get_text(), style='Heading 2')
-                    elif element.name == 'h3':
-                        para = doc.add_paragraph(element.get_text(), style='Heading 3')
-                    elif element.name == 'p':
-                        para = doc.add_paragraph(element.get_text())
-                    elif element.name == 'ul':
-                        for li in element.find_all('li', recursive=False):
-                            doc.add_paragraph(li.get_text(), style='List Bullet')
-                    elif element.name == 'ol':
-                        for li in element.find_all('li', recursive=False):
-                            doc.add_paragraph(li.get_text(), style='List Number')
-                    elif element.name == 'table':
-                        process_table(doc, element)
-                    elif element.name == 'hr' and options["enable_page_breaks"]:
-                        doc.add_page_break()
-
-            except ImportError:
-                # Fallback if BeautifulSoup not available
-                window.console.log("BeautifulSoup not available, adding as plain text")
-                doc.add_paragraph(html_content)
-            except Exception as e:
-                window.console.log(f"Error processing HTML: {e}")
-                # Fallback: add as plain text
-                doc.add_paragraph(html_content)
-
-        def process_table(doc, table_element):
-            """Process HTML table and add to DOCX"""
-            try:
-                from docx.shared import Inches
-                from docx.enum.table import WD_TABLE_ALIGNMENT
-
-                rows = table_element.find_all('tr')
-                if not rows:
-                    return
-
-                # Calculate number of columns
-                num_cols = max(len(row.find_all(['td', 'th'])) for row in rows)
-
-                # Create table
-                table = doc.add_table(rows=len(rows), cols=num_cols)
-                table.style = 'Light Grid Accent 1'
-
-                for i, row in enumerate(rows):
-                    cells = row.find_all(['td', 'th'])
-                    for j, cell in enumerate(cells):
-                        if i < len(table.rows) and j < len(table.columns):
-                            table_cell = table.cell(i, j)
-                            table_cell.text = cell.get_text().strip()
-
-                            # Make header row bold
-                            if cell.name == 'th':
-                                for paragraph in table_cell.paragraphs:
-                                    for run in paragraph.runs:
-                                        run.font.bold = True
-
-            except Exception as e:
-                window.console.log(f"Error processing table: {e}")
-
-        def add_table_of_contents(doc):
-            """Add table of contents to document"""
-            try:
-                # Add table of contents placeholder
-                toc_para = doc.add_paragraph("Table of Contents", style='Heading 1')
-                toc_para.add_run().add_break()
-
-                # Add placeholder for TOC
-                note_para = doc.add_paragraph("[Table of Contents will be generated here]")
-                note_para.italic = True
-
-                doc.add_page_break()
-
-            except Exception as e:
-                window.console.log(f"Error adding table of contents: {e}")
 
         def download_docx():
             """Download generated DOCX file"""
@@ -1063,10 +911,33 @@
                     window.console.log("Installing packages via micropip...")
                     update_status("loading", "Installing python-docx, markdown2, beautifulsoup4...")
                     await micropip.install(["python-docx", "markdown2", "beautifulsoup4"])
-                    window.console.log("Packages installed successfully!")
+                    window.console.log("Dependencies installed!")
+
+                    # Also install the local docx_generator .whl
+                    wheel_url = window.location.origin
+                    if window.location.pathname:
+                        base = window.location.pathname
+                        if base.endswith('/') or base.endswith('index.html'):
+                            if '/' in base:
+                                base = base.rsplit('/', 1)[0]
+                            else:
+                                base = ''
+                        if base:
+                            wheel_url += base
+                            if not wheel_url.endswith('/'):
+                                wheel_url += '/'
+                        else:
+                            wheel_url += '/'
+                    else:
+                        wheel_url += '/'
+                    wheel_url += "wheels/docx_generator-1.0.0-py3-none-any.whl"
+                    window.console.log(f"Installing docx_generator from {wheel_url}")
+                    update_status("loading", "Installing docx_generator package...")
+                    await micropip.install(wheel_url)
+                    window.console.log("docx_generator installed successfully!")
                 except Exception as e:
                     window.console.log(f"Package install note: {e}")
-                    # This is a fallback - packages may already be loaded via py-config
+                    # docx_generator will be installed lazily on first generate if needed
 
                 # Set initial content
                 editor = document.getElementById("editor")

@@ -20,7 +20,6 @@ Thumbs.db
 
 # Generated artifacts
 *.egg-info/
-*.whl
 dist/
 build/
 

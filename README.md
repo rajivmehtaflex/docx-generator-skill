@@ -39,13 +39,79 @@ python docx_generator.py
 
 ```
 docx-generator-skill/
-├── index.html              # Main web application
-├── docx_generator.py       # Core Python library
-├── EXAMPLES.md            # Usage examples
-├── requirements.txt       # Python dependencies
-├── SKILL.md               # Skill documentation
-└── README.md              # This file
+├── index.html               # Main web application (PyScript)
+├── docx_generator.py        # Core Python library (source)
+├── src/docx_generator/
+│   └── __init__.py          # Package source (copy of docx_generator.py)
+├── pyproject.toml           # Build config for wheel packaging
+├── wheels/
+│   └── docx_generator-*.whl # Pre-built wheel for PyScript deployment
+├── dist/                    # Generated wheel files (gitignored)
+├── test_docx_generator.py   # Test suite
+├── start.sh                 # Setup/launch script
+├── requirements.txt         # Python dependencies
+├── package.json             # Project metadata
+├── EXAMPLES.md              # Usage examples
+├── README.md                # This file
+├── SKILL.md                 # Skill documentation
+├── QUICKSTART.md            # Quick reference
+├── SETUP_GUIDE.md           # Deployment guide
+├── IMPLEMENTATION_REPORT.md # Technical report
+└── ARCHITECTURE_FLOW.md     # Architecture diagram
 ```
+
+## 📦 Building the .whl File
+
+The `docx_generator` library is distributed as a Python wheel (`.whl`) for easy installation. The web UI in `index.html` loads this wheel via `micropip` at startup from `wheels/`. If you modify `docx_generator.py` on a remote machine, rebuild the wheel so the changes are reflected in the web UI.
+
+### Build Command
+
+```bash
+# From the project root directory
+python -m build --wheel
+
+# Output: dist/docx_generator-1.0.0-py3-none-any.whl
+```
+
+### After Rebuilding
+
+```bash
+# 1. Copy the fresh wheel to the wheels/ directory for PyScript
+cp dist/docx_generator-1.0.0-py3-none-any.whl wheels/
+
+# 2. (Optional) Install locally to test
+pip install dist/docx_generator-1.0.0-py3-none-any.whl
+
+# 3. Verify it works
+python -c "from docx_generator import DocxGenerator, generate_docx_from_markdown; print('OK')"
+
+# 4. Commit to repo (if deploying via git)
+git add wheels/ dist/ pyproject.toml src/
+git commit -m "rebuild wheel after changes"
+git push
+```
+
+### Prerequisites
+
+```bash
+pip install build wheel setuptools
+```
+
+### Wheel Contents
+
+The wheel packages `docx_generator/__init__.py` as the `docx_generator` module with these dependencies declared:
+- `python-docx >= 1.1.0`
+- `markdown2 >= 2.4.0`
+- `beautifulsoup4 >= 4.12.0`
+
+### Why Two Locations? (`wheels/` vs `dist/`)
+
+| Directory | Purpose | Git |
+|-----------|---------|-----|
+| `dist/`   | Build output, auto-generated | Ignored |
+| `wheels/` | Deployment copy used by PyScript web UI | Tracked |
+
+Always copy the rebuilt wheel from `dist/` to `wheels/` so the web UI picks up your changes.
 
 ## 💻 Usage
 

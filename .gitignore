@@ -18,6 +18,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Node.js
+node_modules/
+
 # Generated artifacts
 *.egg-info/
 dist/
